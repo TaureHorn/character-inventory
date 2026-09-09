@@ -2,11 +2,12 @@ package files
 
 import (
 	"fmt"
+	"os"
 	"testing"
 )
 
 func TestValidator(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name          string
 		filepath      string
 		expectedError error
@@ -52,6 +53,60 @@ func TestValidator(t *testing.T) {
 			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(tt.expectedError)
 			if vErr != tErr {
 				t.Errorf("%s | Expected '%s', but got '%s'\n", t.Name(), tt.expectedError, v.ErrorMessage)
+			}
+		})
+	}
+}
+
+func TestSearchForDatabase(t *testing.T) {
+	tests := []struct {
+		name          string
+		setEnv        bool
+		envVar        string
+		expectedError error
+	}{
+		{
+			name:          "xdg",
+			setEnv:        false,
+			envVar:        "",
+			expectedError: nil,
+		}, {
+			name:          "env var empty",
+			setEnv:        true,
+			envVar:        "",
+			expectedError: fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR),
+		}, {
+			name:          "env var without file",
+			setEnv:        true,
+			envVar:        "files/test-data",
+			expectedError: fmt.Errorf(FILE_ERRORS["NoFileInFilepath"], "files/test-data/"),
+		}, {
+			name:          "env var",
+			setEnv:        true,
+			envVar:        "files/test-data/database.db",
+			expectedError: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setEnv {
+				os.Setenv(DB_FILEPATH_ENV_VAR, tt.envVar)
+			} else {
+				os.Unsetenv(DB_FILEPATH_ENV_VAR)
+			}
+
+			env, envSet := os.LookupEnv(DB_FILEPATH_ENV_VAR)
+			f := new(FileHandler)
+			f.SearchForDatabase()
+
+			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
+			fErr, tErr := fmt.Sprint(f.ErrorMessage), fmt.Sprint(tt.expectedError)
+			if fErr != tErr {
+				t.Errorf("%s | Expected '%s', but got '%s'\n", t.Name(), tt.expectedError, f.ErrorMessage)
+				if envSet {
+					t.Errorf("%s | %s: '%s'\n\n", t.Name(), DB_FILEPATH_ENV_VAR, env)
+				}
 			}
 		})
 	}

@@ -4,6 +4,7 @@ package files
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -14,19 +15,22 @@ var (
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
 	FILE_ERRORS = map[string]string{
-		"TargetIsDirectory":   	"%s is a directory not a file",
-		"FileNotExist":        	"stat %s: no such file or directory",
-		"FileNotFound":        	"No database files with file extentsion '%s' found in directory '%s'",
-		"NotDatabase":		  	"File %s is not a database with file extentsion %s",
-		"IrregularFile":       	"File '%s' is not a regular file",
-		"NoWritePermsissions": 	"You do not have write permissions for file '%s'",
+		"EmptyEnvVar":		   "Set environment variable '%s' is empty",
+		"FileNotExist":        "stat %s: no such file or directory",
+		"FileNotFound":        "No database files with file extentsion '%s' found in directory '%s'",
+		"IrregularFile":       "File '%s' is not a regular file",
+		"NotDatabase":         "File %s is not a database with file extentsion %s",
+		"NoFileInFilepath":	   "Target filepath '%s' is a directory",
+		"NoWritePermsissions": "You do not have write permissions for file '%s'",
+		"TargetIsDirectory":   "%s is a directory not a file",
 	}
 )
 
 type FileHandler struct {
+	Driver        string
+	ErrorMessage  error
 	Filepath      string
 	FileExtension string
-	Driver        string
 }
 
 func (f *FileHandler) Init(path ...string) {
@@ -53,16 +57,9 @@ func (f *FileHandler) GetDatabaseFilepath() error {
 
 	// IF f.Filepath NOT PROVIDED DURING f.Init() FIND FILEPATH
 	if f.Filepath == "" {
-		// TODO: make process for searching for db file
-		directoryList := []string{
-			DB_FILEPATH_ENV_VAR,
-			XDG_DATA_DIR,
-		}
-
-		for _, directory := range directoryList {
-			if strings.Contains(directory, "$") {
-				directory = os.ExpandEnv(directory)
-			}
+		f.SearchForDatabase()
+		if f.ErrorMessage != nil {
+			return f.ErrorMessage
 		}
 	}
 
@@ -75,6 +72,31 @@ func (f *FileHandler) GetDatabaseFilepath() error {
 	} else {
 		return nil
 	}
+}
+
+// LOOK IN ENV VAR OR XDG_DATA_DIR FOR DATABASE FILE
+func (f *FileHandler) SearchForDatabase() {
+	env, envSet := os.LookupEnv(DB_FILEPATH_ENV_VAR)
+	if envSet && env == "" {
+		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR)
+	}
+
+	// PICK BETWEEN DB_FILEPATH_ENV_VAR & XDG_DATA_DIR
+	var targetFilepath string
+	if envSet {
+		targetFilepath = env
+	} else {
+		targetFilepath = XDG_DATA_DIR
+	}
+
+	// CHECK FOR FILES
+	_, file := filepath.Split(targetFilepath)
+	if file == "" {
+		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["NoFileInFilepath"], targetFilepath)
+	}
+
+	f.Filepath = targetFilepath
+	return
 }
 
 type FileValidator struct {
