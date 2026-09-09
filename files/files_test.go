@@ -76,11 +76,6 @@ func TestSearchForDatabase(t *testing.T) {
 			envVar:        "",
 			expectedError: fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR),
 		}, {
-			name:          "env var without file",
-			setEnv:        true,
-			envVar:        "files/test-data",
-			expectedError: fmt.Errorf(FILE_ERRORS["NoFileInFilepath"], "files/test-data/"),
-		}, {
 			name:          "env var",
 			setEnv:        true,
 			envVar:        "files/test-data/database.db",

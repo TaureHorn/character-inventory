@@ -4,7 +4,6 @@ package files
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -15,14 +14,19 @@ var (
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
 	FILE_ERRORS = map[string]string{
-		"EmptyEnvVar":		   "Set environment variable '%s' is empty",
+		"EmptyEnvVar":         "Set environment variable '%s' is empty",
 		"FileNotExist":        "stat %s: no such file or directory",
-		"FileNotFound":        "No database files with file extentsion '%s' found in directory '%s'",
 		"IrregularFile":       "File '%s' is not a regular file",
 		"NotDatabase":         "File %s is not a database with file extentsion %s",
-		"NoFileInFilepath":	   "Target filepath '%s' is a directory",
 		"NoWritePermsissions": "You do not have write permissions for file '%s'",
 		"TargetIsDirectory":   "%s is a directory not a file",
+	}
+
+	// KEEP TRACK OF HOW DATABASE FILE WAS ACQUIRED
+	HANDLER_SOURCE_MODE = map[string]uint{
+		"ARG": 2,
+		"ENV": 1,
+		"XDG": 0,
 	}
 )
 
@@ -31,13 +35,16 @@ type FileHandler struct {
 	ErrorMessage  error
 	Filepath      string
 	FileExtension string
+	Mode          uint
 }
 
 func (f *FileHandler) Init(path ...string) {
 	f.FileExtension = DB_FILE_EXTENSION
 	f.Driver = DB_DRIVER
+
 	if len(path) > 0 {
 		f.Filepath = path[0]
+		f.Mode = HANDLER_SOURCE_MODE["ARG"]
 	}
 	err := f.GetDatabaseFilepath()
 	if err != nil {
@@ -77,8 +84,12 @@ func (f *FileHandler) GetDatabaseFilepath() error {
 // LOOK IN ENV VAR OR XDG_DATA_DIR FOR DATABASE FILE
 func (f *FileHandler) SearchForDatabase() {
 	env, envSet := os.LookupEnv(DB_FILEPATH_ENV_VAR)
-	if envSet && env == "" {
-		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR)
+	if envSet {
+		f.Mode = HANDLER_SOURCE_MODE["ENV"]
+		if env == "" {
+			f.ErrorMessage = fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR)
+			return
+		}
 	}
 
 	// PICK BETWEEN DB_FILEPATH_ENV_VAR & XDG_DATA_DIR
@@ -89,12 +100,7 @@ func (f *FileHandler) SearchForDatabase() {
 		targetFilepath = XDG_DATA_DIR
 	}
 
-	// CHECK FOR FILES
-	_, file := filepath.Split(targetFilepath)
-	if file == "" {
-		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["NoFileInFilepath"], targetFilepath)
-	}
-
+	// SET FILEPATH - MOST VALIDATION HANDLED BY FileValidator.ValidateFilepath()
 	f.Filepath = targetFilepath
 	return
 }
