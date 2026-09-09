@@ -78,10 +78,12 @@ func (f *FileHandler) Init(path ...string) {
 	f.Driver = DB_DRIVER
 
 	// IF PROVIDED FILE PASSED IN FROM CMD ARGS SET f.Filepath, OTHERWISE FIND IN env OR XDG
-	if len(path) > 0 { // FILEPATH PASSED INTO FUNC
-		f.Filepath = path[0]
+	fpSet, argSet := len(f.Filepath) > 0, len(path) > 0
+	if fpSet || argSet { // FILEPATH SET ON struct INSTANTIATION
 		f.Mode = HANDLER_SOURCE_MODE["ARG"]
-	} else if f.Filepath == "" { // FILEPATH NOT SET ON struct INSTANTIATION
+	} else if !fpSet && argSet { // FILEPATH PASSED INTO FUNC
+		f.Filepath = path[0]
+	} else if !fpSet && !argSet { // FILEPATH NOT SET ON struct INSTANTIATION
 		f.SearchForDatabase()
 	}
 
@@ -140,8 +142,9 @@ func (f *FileHandler) ValidateFilepath() {
 	}
 
 	var tests = []func(os.FileInfo){
-		f.affirmWritePermission,
+		f.affirmNotDirectory,
 		f.affirmRegularFile,
+		f.affirmWritePermission,
 		f.affirmDatabase,
 	}
 	// LOOP THROUGH TESTS AND BREAK IF ONE SETS AN ERROR != nil

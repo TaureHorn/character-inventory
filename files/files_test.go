@@ -15,7 +15,7 @@ func TestValidator(t *testing.T) {
 		{
 			name:          "directory",
 			filepath:      "test-data/test",
-			expectedError: fmt.Errorf(FILE_ERRORS["IrregularFile"], "test-data/test"),
+			expectedError: fmt.Errorf(FILE_ERRORS["TargetIsDirectory"], "test-data/test"),
 		},
 		{
 			name:          "empty filepath",
@@ -26,7 +26,7 @@ func TestValidator(t *testing.T) {
 			filepath:      "test-data/testfile_xxx",
 			expectedError: fmt.Errorf(FILE_ERRORS["FileNotExist"], "test-data/testfile_xxx"),
 		}, {
-			name:          "file does exist but no write permissions",
+			name:          "file exists, is NOT writeable",
 			filepath:      "test-data/testfile_400",
 			expectedError: fmt.Errorf(FILE_ERRORS["NoWritePermsissions"], "test-data/testfile_400"),
 		}, {
@@ -34,11 +34,11 @@ func TestValidator(t *testing.T) {
 			filepath:      "/dev/nvme0n1",
 			expectedError: fmt.Errorf(FILE_ERRORS["IrregularFile"], "/dev/nvme0n1"),
 		}, {
-			name:          "file does exist & has write permissions not database",
+			name:          "file exists, is writeable, NOT database",
 			filepath:      "test-data/testfile_644",
 			expectedError: fmt.Errorf(FILE_ERRORS["NotDatabase"], "test-data/testfile_644", DB_FILE_EXTENSION),
 		}, {
-			name:          "file exists, is writeable and is database",
+			name:          "file exists, is writeable, is database",
 			filepath:      "test-data/database.db",
 			expectedError: nil,
 		},
@@ -46,7 +46,9 @@ func TestValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			os.Unsetenv(XDG_DATA_DIR)
 			v := new(FileHandler{Filepath: tt.filepath})
+			v.FileExtension = DB_FILE_EXTENSION
 			v.ValidateFilepath()
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
