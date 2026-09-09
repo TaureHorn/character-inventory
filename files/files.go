@@ -20,6 +20,7 @@ var (
 		"NotDatabase":         "File %s is not a database with file extentsion %s",
 		"NoWritePermsissions": "You do not have write permissions for file '%s'",
 		"TargetIsDirectory":   "%s is a directory not a file",
+		"XDGNotCreated":	   "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database",
 	}
 
 	// KEEP TRACK OF HOW DATABASE FILE WAS ACQUIRED
@@ -38,47 +39,68 @@ type FileHandler struct {
 	Mode          uint
 }
 
-func (f *FileHandler) Init(path ...string) {
-	f.FileExtension = DB_FILE_EXTENSION
-	f.Driver = DB_DRIVER
-
-	if len(path) > 0 {
-		f.Filepath = path[0]
-		f.Mode = HANDLER_SOURCE_MODE["ARG"]
+func (f *FileHandler) affirmDatabase(fileInfo os.FileInfo) {
+	if !strings.HasSuffix(fileInfo.Name(), f.FileExtension) {
+		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["NotDatabase"], f.Filepath, f.FileExtension)
 	}
-	err := f.GetDatabaseFilepath()
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+}
+
+func (f *FileHandler) affirmNotDirectory(fileInfo os.FileInfo) {
+	if fileInfo.IsDir() {
+		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["TargetIsDirectory"], f.Filepath)
+	}
+}
+
+func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
+	if !fileInfo.Mode().IsRegular() {
+		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["IrregularFile"], f.Filepath)
 	}
 	return
 }
 
-func (f *FileHandler) CreateDatabaseFile() error {
-	// directory := f.DatabaseFilepath
-	// TODO: make proccess for file creation
-	return nil
+func (f *FileHandler) affirmWritePermission(fileInfo os.FileInfo) {
+	if fileInfo.Mode().Perm() < 0o600 {
+		// 0o600 IS OCTAL LITERAL EQUIVALENT TO USER WRITE PERMISSIONS
+		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["NoWritePermsissions"], f.Filepath)
+	}
+	return
 }
 
-func (f *FileHandler) GetDatabaseFilepath() error {
+func (f *FileHandler) checkEdgeCase(fileErr error) (edgeErr error, overrideErr bool) {
+	if fileErr.Error() == fmt.Errorf(FILE_ERRORS["FileNotExist"], XDG_DATA_DIR).Error() {
+		return fmt.Errorf(FILE_ERRORS["XDGNotCreated"], XDG_DATA_DIR), true
+	}
+	return
+}
 
-	// IF f.Filepath NOT PROVIDED DURING f.Init() FIND FILEPATH
-	if f.Filepath == "" {
+func (f *FileHandler) Init(path ...string) {
+	f.FileExtension = DB_FILE_EXTENSION
+	f.Driver = DB_DRIVER
+
+	// IF PROVIDED FILE PASSED IN FROM CMD ARGS SET f.Filepath, OTHERWISE FIND IN env OR XDG
+	if len(path) > 0 { // FILEPATH PASSED INTO FUNC
+		f.Filepath = path[0]
+		f.Mode = HANDLER_SOURCE_MODE["ARG"]
+	} else if f.Filepath == "" { // FILEPATH NOT SET ON struct INSTANTIATION
 		f.SearchForDatabase()
-		if f.ErrorMessage != nil {
-			return f.ErrorMessage
-		}
 	}
 
 	// VALIDATE PROVIDED FILEPATH BEFORE RETURN
-	v := new(FileValidator{filepath: f.Filepath})
-	v.ValidateFilepath()
+	f.ValidateFilepath()
 
-	if v.ErrorMessage != nil {
-		return v.ErrorMessage
-	} else {
-		return nil
+	// CHECK FOR ERRORS SET TO FileHandler
+	if f.ErrorMessage != nil {
+		fmt.Println(f.ErrorMessage)
+		os.Exit(1)
 	}
+
+	return
+}
+
+func (f *FileHandler) CreateDatabaseFile(desiredFilepath string) error {
+	// directory := f.DatabaseFilepath
+	// TODO: make proccess for file creation
+	return nil
 }
 
 // LOOK IN ENV VAR OR XDG_DATA_DIR FOR DATABASE FILE
@@ -105,55 +127,27 @@ func (f *FileHandler) SearchForDatabase() {
 	return
 }
 
-type FileValidator struct {
-	ErrorMessage error
-	filepath     string
-}
-
-func (v *FileValidator) affirmDatabase(fileInfo os.FileInfo) {
-	if !strings.HasSuffix(fileInfo.Name(), DB_FILE_EXTENSION) {
-		v.ErrorMessage = fmt.Errorf(FILE_ERRORS["NotDatabase"], v.filepath, DB_FILE_EXTENSION)
-	}
-}
-
-func (v *FileValidator) affirmNotDirectory(fileInfo os.FileInfo) {
-	if fileInfo.IsDir() {
-		v.ErrorMessage = fmt.Errorf(FILE_ERRORS["TargetIsDirectory"], v.filepath)
-	}
-}
-
-func (v *FileValidator) affirmRegularFile(fileInfo os.FileInfo) {
-	if !fileInfo.Mode().IsRegular() {
-		v.ErrorMessage = fmt.Errorf(FILE_ERRORS["IrregularFile"], v.filepath)
-	}
-	return
-}
-
-func (v *FileValidator) affirmWritePermission(fileInfo os.FileInfo) {
-	if fileInfo.Mode().Perm() < 0o600 {
-		// 0o600 IS OCTAL LITERAL EQUIVALENT TO USER WRITE PERMISSIONS
-		v.ErrorMessage = fmt.Errorf(FILE_ERRORS["NoWritePermsissions"], v.filepath)
-	}
-	return
-}
-
-func (v *FileValidator) ValidateFilepath() {
+func (f *FileHandler) ValidateFilepath() {
 	// err OUPUT OF os.Stat WILL HANDLE FILES THAT DO NOT EXIST
-	fileInfo, err := os.Stat(v.filepath)
+	fileInfo, err := os.Stat(f.Filepath)
 	if err != nil {
-		v.ErrorMessage = err
+		edgeErr, overrideErr := f.checkEdgeCase(err)
+		if overrideErr {
+			err = edgeErr
+		}
+		f.ErrorMessage = err
 		return
 	}
 
 	var tests = []func(os.FileInfo){
-		v.affirmWritePermission,
-		v.affirmRegularFile,
-		v.affirmDatabase,
+		f.affirmWritePermission,
+		f.affirmRegularFile,
+		f.affirmDatabase,
 	}
 	// LOOP THROUGH TESTS AND BREAK IF ONE SETS AN ERROR != nil
 	for _, test := range tests {
 		test(fileInfo)
-		if v.ErrorMessage != nil {
+		if f.ErrorMessage != nil {
 			break
 		}
 	}

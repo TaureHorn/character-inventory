@@ -18,13 +18,13 @@ character-inventory help
 `
 
 func createFile(index int, args []string) {
-	f := files.FileHandler{}
+	f := new(files.FileHandler)
 	if len(args) >= index+1 {
-		f.Init(args[index+1])
+		f.CreateDatabaseFile(args[index+1])
 	} else {
-		f.Init(files.XDG_DATA_DIR)
+		f.CreateDatabaseFile(files.XDG_DATA_DIR)
 	}
-	f.CreateDatabaseFile()
+	os.Exit(0)
 }
 
 // ITERATE OVER CMD ARGS FIND COMMANDS OR PROVIDED DATABASE FILEPATH
@@ -57,6 +57,7 @@ func parseCmdArguments(args []string) (string, bool) {
 // PRINT const helpString
 func printHelp() {
 	fmt.Print(helpString)
+	os.Exit(0)
 	return
 }
 

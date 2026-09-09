@@ -46,7 +46,7 @@ func TestValidator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := new(FileValidator{filepath: tt.filepath})
+			v := new(FileHandler{Filepath: tt.filepath})
 			v.ValidateFilepath()
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
@@ -64,22 +64,26 @@ func TestSearchForDatabase(t *testing.T) {
 		setEnv        bool
 		envVar        string
 		expectedError error
+		expectedMode  uint
 	}{
 		{
 			name:          "xdg",
 			setEnv:        false,
 			envVar:        "",
 			expectedError: nil,
+			expectedMode:  HANDLER_SOURCE_MODE["XDG"],
 		}, {
 			name:          "env var empty",
 			setEnv:        true,
 			envVar:        "",
 			expectedError: fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR),
+			expectedMode:  HANDLER_SOURCE_MODE["ENV"],
 		}, {
 			name:          "env var",
 			setEnv:        true,
 			envVar:        "files/test-data/database.db",
 			expectedError: nil,
+			expectedMode:  HANDLER_SOURCE_MODE["ENV"],
 		},
 	}
 
@@ -102,6 +106,9 @@ func TestSearchForDatabase(t *testing.T) {
 				if envSet {
 					t.Errorf("%s | %s: '%s'\n\n", t.Name(), DB_FILEPATH_ENV_VAR, env)
 				}
+			}
+			if f.Mode != tt.expectedMode {
+				t.Errorf("%s | Expected mode %d, but got %d \n", t.Name(), tt.expectedMode, f.Mode)
 			}
 		})
 	}
