@@ -64,7 +64,6 @@ func main() {
 	databaseFile, providedFilepath := parseCmdArguments(os.Args)
 
 	fileHandler := new(files.FileHandler)
-	fileHandler.Init()
 	if providedFilepath {
 		fileHandler.Init(databaseFile)
 	} else {

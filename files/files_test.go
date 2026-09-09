@@ -1,6 +1,7 @@
 package files
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -11,20 +12,33 @@ func TestValidator(t *testing.T) {
 		expectedError error
 	}{
 		{
+			name:          "directory",
+			filepath:      "test-data/test",
+			expectedError: fmt.Errorf(FILE_ERRORS["IrregularFile"], "test-data/test"),
+		},
+		{
 			name:          "empty filepath",
 			filepath:      "",
-			expectedError: FILE_ERRORS["EmptyFileString"],
+			expectedError: fmt.Errorf(FILE_ERRORS["FileNotExist"], ""),
 		}, {
 			name:          "filled filpath but file doesn't exist",
 			filepath:      "test-data/testfile_xxx",
-			expectedError: FILE_ERRORS["DoesNotExist"],
+			expectedError: fmt.Errorf(FILE_ERRORS["FileNotExist"], "test-data/testfile_xxx"),
 		}, {
 			name:          "file does exist but no write permissions",
 			filepath:      "test-data/testfile_400",
-			expectedError: FILE_ERRORS["NoWritePermsissions"],
+			expectedError: fmt.Errorf(FILE_ERRORS["NoWritePermsissions"], "test-data/testfile_400"),
 		}, {
-			name:          "file does exist & has write permissions",
+			name:          "irregular file",
+			filepath:      "/dev/nvme0n1",
+			expectedError: fmt.Errorf(FILE_ERRORS["IrregularFile"], "/dev/nvme0n1"),
+		}, {
+			name:          "file does exist & has write permissions not database",
 			filepath:      "test-data/testfile_644",
+			expectedError: fmt.Errorf(FILE_ERRORS["NotDatabase"], "test-data/testfile_644", DB_FILE_EXTENSION),
+		}, {
+			name:          "file exists, is writeable and is database",
+			filepath:      "test-data/database.db",
 			expectedError: nil,
 		},
 	}
@@ -33,8 +47,11 @@ func TestValidator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := new(FileValidator{filepath: tt.filepath})
 			v.ValidateFilepath()
-			if v.ErrorMessage != tt.expectedError {
-				t.Errorf("%s | Expected %s, but got %s", t.Name(), tt.expectedError, v.ErrorMessage)
+
+			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
+			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(tt.expectedError)
+			if vErr != tErr {
+				t.Errorf("%s | Expected '%s', but got '%s'\n", t.Name(), tt.expectedError, v.ErrorMessage)
 			}
 		})
 	}
