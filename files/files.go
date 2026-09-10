@@ -15,18 +15,20 @@ const (
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
 	// FILE ERRORS
-	ErrAlreadyExists   string = "%s already exists"
-	ErrEmptyEnvVar     string = "Set environment variable '%s' is empty"
-	ErrFileNotExist    string = "stat %s: no such file or directory"
-	ErrIrregularFile   string = "File '%s' is not a regular file"
-	ErrNotDatabase     string = "File %s is not a database with file extentsion %s"
-	ErrNonWriteable    string = "You do not have write permissions for file '%s'"
-	ErrTargetDirectory string = "%s is a directory not a file"
-	ErrXDGNotCreated   string = "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database"
+	ErrAlreadyExists    string = "%s already exists"
+	ErrEmptyEnvVar      string = "Set environment variable '%s' is empty"
+	ErrFileNotExist     string = "stat %s: no such file or directory"
+	ErrIrregularFile    string = "File '%s' is not a regular file"
+	ErrNotDatabase      string = "File %s is not a database with file extentsion %s"
+	ErrNonWriteable     string = "You do not have write permissions for file '%s'"
+	ErrPermissionDenied string = "stat %s: permission denied"
+	ErrTargetDirectory  string = "%s is a directory not a file"
+	ErrXDGNotCreated    string = "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database"
 )
 
 // KEEP TRACK OF HOW DATABASE FILE WAS ACQUIRED WITH enum
 type HandlerMode int
+type ValidationContext int
 
 const (
 	XDG HandlerMode = iota
@@ -34,11 +36,21 @@ const (
 	ARG
 )
 
+const (
+	CREATE ValidationContext = iota
+	INIT
+)
+
 func (h HandlerMode) String() string {
-	return []string{"XDG", "ENV", "ARG"}[h]
+	return [...]string{"XDG", "ENV", "ARG"}[h]
+}
+
+func (v ValidationContext) String() string {
+	return [...]string{"CREATE", "INIT"}[v]
 }
 
 type FileHandler struct {
+	Context       ValidationContext
 	Driver        string
 	EnvVar        string
 	EnvVarSet     bool
@@ -85,13 +97,17 @@ func (f *FileHandler) checkEdgeCase(fileErr error) (edgeErr error, overrideErr b
 
 // TODO: make proccess for file creation
 func (f *FileHandler) CreateDatabaseFile() {
+	f.Context = CREATE
 	f.FileExtension = DB_FILE_EXTENSION
 
 	// VALIDATE GIVEN FILEPATH
-	f.ValidateNewFilepath()
-	if f.ErrorMessage != nil {
-		fmt.Println(f.ErrorMessage)
-		os.Exit(1)
+	for _, validation := range []func(){f.ValidateDirectory, f.ValidateFilepath} {
+		validation()
+		if f.ErrorMessage != nil {
+			fmt.Println(f.ErrorMessage)
+			os.Exit(1)
+			break
+		}
 	}
 
 	// CREATE NEW FILE
@@ -104,9 +120,27 @@ func (f *FileHandler) GetEnvironmentVariable() {
 	return
 }
 
+func (f *FileHandler) getValidationTests(context ValidationContext) (tests []func(os.FileInfo)) {
+	switch context {
+	case CREATE:
+		tests = []func(os.FileInfo){
+			f.affirmNotDirectory,
+			f.affirmDoesNotExist,
+		}
+	case INIT:
+		tests = []func(os.FileInfo){
+			f.affirmNotDirectory,
+			f.affirmRegularFile,
+			f.affirmWritePermission,
+		}
+	}
+	return
+}
+
 func (f *FileHandler) Init(path ...string) {
-	f.FileExtension = DB_FILE_EXTENSION
+	f.Context = INIT
 	f.Driver = DB_DRIVER
+	f.FileExtension = DB_FILE_EXTENSION
 	f.GetEnvironmentVariable()
 
 	// IF PROVIDED FILE PASSED IN FROM CMD ARGS SET f.Filepath, OTHERWISE FIND IN env OR XDG
@@ -120,7 +154,7 @@ func (f *FileHandler) Init(path ...string) {
 	}
 
 	// VALIDATE PROVIDED FILEPATH BEFORE RETURN
-	f.ValidateExistingFilepath()
+	f.ValidateFilepath()
 
 	// CHECK FOR ERRORS SET TO FileHandler
 	if f.ErrorMessage != nil {
@@ -153,7 +187,23 @@ func (f *FileHandler) SearchForDatabase() {
 	return
 }
 
-func (f *FileHandler) ValidateExistingFilepath() {
+func (f *FileHandler) ValidateDirectory() {
+
+	// CHECK BASE DIRECTORY EXISTS AND IS WRITABLE
+	dirInfo, err := os.Stat(path.Dir(f.Filepath))
+	if err != nil {
+		f.ErrorMessage = err
+		return
+	}
+	f.affirmWritePermission(dirInfo)
+	if f.ErrorMessage != nil {
+		return
+	}
+
+	return
+}
+
+func (f *FileHandler) ValidateFilepath() {
 	// err OUPUT OF os.Stat WILL HANDLE FILES THAT DO NOT EXIST
 	fileInfo, err := os.Stat(f.Filepath)
 	if err != nil {
@@ -165,11 +215,7 @@ func (f *FileHandler) ValidateExistingFilepath() {
 		return
 	}
 
-	tests := []func(os.FileInfo){
-		f.affirmNotDirectory,
-		f.affirmRegularFile,
-		f.affirmWritePermission,
-	}
+	tests := f.getValidationTests(f.Context)
 	// LOOP THROUGH TESTS AND BREAK IF ONE SETS AN ERROR != nil
 	for _, test := range tests {
 		test(fileInfo)
@@ -177,35 +223,5 @@ func (f *FileHandler) ValidateExistingFilepath() {
 			break
 		}
 	}
-	return
-}
-
-func (f *FileHandler) ValidateNewFilepath() {
-	// databaseToCreate := path.Base(f.Filepath)
-	databaseDirectory := path.Dir(f.Filepath)
-
-	// CHECK BASE DIRECTORY EXISTS AND IS WRITABLE
-	dirInfo, err := os.Stat(databaseDirectory)
-	if err != nil {
-		f.ErrorMessage = err
-	}
-	f.affirmWritePermission(dirInfo)
-	if f.ErrorMessage != nil {
-		return
-	}
-
-	// CHECK FILE DOES NOT EXIST AND IS NOT DIRECTORY
-	fileInfo, err := os.Stat(f.Filepath)
-	tests := []func(os.FileInfo){
-		f.affirmNotDirectory,
-		f.affirmDoesNotExist,
-	}
-	for _, test := range tests {
-		test(fileInfo)
-		if f.ErrorMessage != nil {
-			break
-		}
-	}
-
 	return
 }

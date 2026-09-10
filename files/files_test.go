@@ -16,61 +16,61 @@ func TestValidate(t *testing.T) {
 		name          string
 		filepath      string
 		expectedError error
-		function      func()
+		context		  ValidationContext
 	}{
 		{
 			name:          "directory",
 			filepath:      "test-data/test",
 			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
-			function:      v.ValidateExistingFilepath,
+			context: INIT,
 		}, {
 			name:          "empty filepath",
 			filepath:      "",
 			expectedError: fmt.Errorf(ErrFileNotExist, ""),
-			function:      v.ValidateExistingFilepath,
+			context: INIT,
 		}, {
 			name:          "filled filpath but file doesn't exist",
 			filepath:      "test-data/testfile_xxx",
 			expectedError: fmt.Errorf(ErrFileNotExist, "test-data/testfile_xxx"),
-			function:      v.ValidateExistingFilepath,
+			context: INIT,
 		}, {
 			name:          "file exists, is NOT writeable",
 			filepath:      "test-data/testfile_400",
 			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/testfile_400"),
-			function:      v.ValidateExistingFilepath,
+			context: INIT,
 		}, {
 			name:          "irregular file",
 			filepath:      "/dev/nvme0n1",
 			expectedError: fmt.Errorf(ErrIrregularFile, "/dev/nvme0n1"),
-			function:      v.ValidateExistingFilepath,
+			context: INIT,
 		}, {
 			name:          "file exists, is writeable",
 			filepath:      "test-data/testfile_644",
 			expectedError: nil,
-			function:      v.ValidateExistingFilepath,
+			context: INIT,
 		}, {
 			name:          "file already exists",
 			filepath:      "test-data/database.db",
 			expectedError: fmt.Errorf(ErrAlreadyExists, "test-data/database.db"),
-			function:      v.ValidateNewFilepath,
+			context: CREATE,
 		}, {
 			name:          "directory not writeable",
 			filepath:      "test-data/no-write-dir/file",
-			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/no-write-dir/file"),
-			function:      v.ValidateNewFilepath,
+			expectedError: fmt.Errorf(ErrPermissionDenied, "test-data/no-write-dir/file"),
+			context: CREATE,
 		}, {
 			name:          "file is directory",
 			filepath:      "test-data/test",
 			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
-			function:      v.ValidateNewFilepath,
+			context: CREATE,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v.ErrorMessage = nil
 			v.Filepath = tt.filepath
-			tt.function()
+			v.Context = tt.context
+			v.ValidateFilepath()
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
 			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(tt.expectedError)
