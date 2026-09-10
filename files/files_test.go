@@ -15,28 +15,28 @@ func TestValidator(t *testing.T) {
 		{
 			name:          "directory",
 			filepath:      "test-data/test",
-			expectedError: fmt.Errorf(FILE_ERRORS["TargetIsDirectory"], "test-data/test"),
+			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
 		},
 		{
 			name:          "empty filepath",
 			filepath:      "",
-			expectedError: fmt.Errorf(FILE_ERRORS["FileNotExist"], ""),
+			expectedError: fmt.Errorf(ErrFileNotExist, ""),
 		}, {
 			name:          "filled filpath but file doesn't exist",
 			filepath:      "test-data/testfile_xxx",
-			expectedError: fmt.Errorf(FILE_ERRORS["FileNotExist"], "test-data/testfile_xxx"),
+			expectedError: fmt.Errorf(ErrFileNotExist, "test-data/testfile_xxx"),
 		}, {
 			name:          "file exists, is NOT writeable",
 			filepath:      "test-data/testfile_400",
-			expectedError: fmt.Errorf(FILE_ERRORS["NoWritePermsissions"], "test-data/testfile_400"),
+			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/testfile_400"),
 		}, {
 			name:          "irregular file",
 			filepath:      "/dev/nvme0n1",
-			expectedError: fmt.Errorf(FILE_ERRORS["IrregularFile"], "/dev/nvme0n1"),
+			expectedError: fmt.Errorf(ErrIrregularFile, "/dev/nvme0n1"),
 		}, {
 			name:          "file exists, is writeable, NOT database",
 			filepath:      "test-data/testfile_644",
-			expectedError: fmt.Errorf(FILE_ERRORS["NotDatabase"], "test-data/testfile_644", DB_FILE_EXTENSION),
+			expectedError: fmt.Errorf(ErrNotDatabase, "test-data/testfile_644", DB_FILE_EXTENSION),
 		}, {
 			name:          "file exists, is writeable, is database",
 			filepath:      "test-data/database.db",
@@ -66,26 +66,26 @@ func TestSearchForDatabase(t *testing.T) {
 		setEnv        bool
 		envVar        string
 		expectedError error
-		expectedMode  uint
+		expectedMode  HandlerMode
 	}{
 		{
 			name:          "xdg",
 			setEnv:        false,
 			envVar:        "",
 			expectedError: nil,
-			expectedMode:  HANDLER_SOURCE_MODE["XDG"],
+			expectedMode:  XDG,
 		}, {
 			name:          "env var empty",
 			setEnv:        true,
 			envVar:        "",
-			expectedError: fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR),
-			expectedMode:  HANDLER_SOURCE_MODE["ENV"],
+			expectedError: fmt.Errorf(ErrEmptyEnvVar, DB_FILEPATH_ENV_VAR),
+			expectedMode:  ENV,
 		}, {
 			name:          "env var",
 			setEnv:        true,
 			envVar:        "files/test-data/database.db",
 			expectedError: nil,
-			expectedMode:  HANDLER_SOURCE_MODE["ENV"],
+			expectedMode:  ENV,
 		},
 	}
 

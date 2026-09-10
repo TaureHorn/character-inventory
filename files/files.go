@@ -7,53 +7,57 @@ import (
 	"strings"
 )
 
-var (
+const (
 	DB_DRIVER           string = "sqlite3"
 	DB_FILEPATH_ENV_VAR string = "CHAR_INV_DATABASE"
 	DB_FILE_EXTENSION   string = ".db"
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
-	FILE_ERRORS = map[string]string{
-		"EmptyEnvVar":         "Set environment variable '%s' is empty",
-		"FileNotExist":        "stat %s: no such file or directory",
-		"IrregularFile":       "File '%s' is not a regular file",
-		"NotDatabase":         "File %s is not a database with file extentsion %s",
-		"NoWritePermsissions": "You do not have write permissions for file '%s'",
-		"TargetIsDirectory":   "%s is a directory not a file",
-		"XDGNotCreated":	   "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database",
-	}
-
-	// KEEP TRACK OF HOW DATABASE FILE WAS ACQUIRED
-	HANDLER_SOURCE_MODE = map[string]uint{
-		"ARG": 2,
-		"ENV": 1,
-		"XDG": 0,
-	}
+	// FILE ERRORS
+	ErrEmptyEnvVar		string = "Set environment variable '%s' is empty"
+	ErrFileNotExist		string = "stat %s: no such file or directory"
+	ErrIrregularFile	string = "File '%s' is not a regular file"
+	ErrNotDatabase		string = "File %s is not a database with file extentsion %s"
+	ErrNonWriteable 	string = "You do not have write permissions for file '%s'"
+	ErrTargetDirectory	string = "%s is a directory not a file"
+	ErrXDGNotCreated	string = "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database"
 )
+
+// KEEP TRACK OF HOW DATABASE FILE WAS ACQUIRED WITH enum
+type HandlerMode int
+const (
+	XDG HandlerMode = iota
+	ENV
+	ARG	
+)
+
+func (h HandlerMode) String() string {
+	return []string{"XDG", "ENV", "ARG"}[h]
+}
 
 type FileHandler struct {
 	Driver        string
 	ErrorMessage  error
 	Filepath      string
 	FileExtension string
-	Mode          uint
+	Mode          HandlerMode 
 }
 
 func (f *FileHandler) affirmDatabase(fileInfo os.FileInfo) {
 	if !strings.HasSuffix(fileInfo.Name(), f.FileExtension) {
-		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["NotDatabase"], f.Filepath, f.FileExtension)
+		f.ErrorMessage = fmt.Errorf(ErrNotDatabase, f.Filepath, f.FileExtension)
 	}
 }
 
 func (f *FileHandler) affirmNotDirectory(fileInfo os.FileInfo) {
 	if fileInfo.IsDir() {
-		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["TargetIsDirectory"], f.Filepath)
+		f.ErrorMessage = fmt.Errorf(ErrTargetDirectory, f.Filepath)
 	}
 }
 
 func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 	if !fileInfo.Mode().IsRegular() {
-		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["IrregularFile"], f.Filepath)
+		f.ErrorMessage = fmt.Errorf(ErrIrregularFile, f.Filepath)
 	}
 	return
 }
@@ -61,14 +65,14 @@ func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 func (f *FileHandler) affirmWritePermission(fileInfo os.FileInfo) {
 	if fileInfo.Mode().Perm() < 0o600 {
 		// 0o600 IS OCTAL LITERAL EQUIVALENT TO USER WRITE PERMISSIONS
-		f.ErrorMessage = fmt.Errorf(FILE_ERRORS["NoWritePermsissions"], f.Filepath)
+		f.ErrorMessage = fmt.Errorf(ErrNonWriteable, f.Filepath)
 	}
 	return
 }
 
 func (f *FileHandler) checkEdgeCase(fileErr error) (edgeErr error, overrideErr bool) {
-	if fileErr.Error() == fmt.Errorf(FILE_ERRORS["FileNotExist"], XDG_DATA_DIR).Error() {
-		return fmt.Errorf(FILE_ERRORS["XDGNotCreated"], XDG_DATA_DIR), true
+	if fileErr.Error() == fmt.Errorf(ErrFileNotExist, XDG_DATA_DIR).Error() {
+		return fmt.Errorf(ErrXDGNotCreated, XDG_DATA_DIR), true
 	}
 	return
 }
@@ -80,7 +84,7 @@ func (f *FileHandler) Init(path ...string) {
 	// IF PROVIDED FILE PASSED IN FROM CMD ARGS SET f.Filepath, OTHERWISE FIND IN env OR XDG
 	fpSet, argSet := len(f.Filepath) > 0, len(path) > 0
 	if fpSet || argSet { // FILEPATH SET ON struct INSTANTIATION
-		f.Mode = HANDLER_SOURCE_MODE["ARG"]
+		f.Mode = ARG
 	} else if !fpSet && argSet { // FILEPATH PASSED INTO FUNC
 		f.Filepath = path[0]
 	} else if !fpSet && !argSet { // FILEPATH NOT SET ON struct INSTANTIATION
@@ -109,9 +113,9 @@ func (f *FileHandler) CreateDatabaseFile(desiredFilepath string) error {
 func (f *FileHandler) SearchForDatabase() {
 	env, envSet := os.LookupEnv(DB_FILEPATH_ENV_VAR)
 	if envSet {
-		f.Mode = HANDLER_SOURCE_MODE["ENV"]
+		f.Mode = ENV
 		if env == "" {
-			f.ErrorMessage = fmt.Errorf(FILE_ERRORS["EmptyEnvVar"], DB_FILEPATH_ENV_VAR)
+			f.ErrorMessage = fmt.Errorf(ErrEmptyEnvVar, DB_FILEPATH_ENV_VAR)
 			return
 		}
 	}
