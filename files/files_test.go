@@ -6,50 +6,71 @@ import (
 	"testing"
 )
 
-func TestValidator(t *testing.T) {
+func TestValidate(t *testing.T) {
+
+	os.Unsetenv(DB_FILEPATH_ENV_VAR)
+	v := new(FileHandler)
+	v.FileExtension = DB_FILE_EXTENSION
+
 	tests := []struct {
 		name          string
 		filepath      string
 		expectedError error
+		function      func()
 	}{
 		{
 			name:          "directory",
 			filepath:      "test-data/test",
 			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
-		},
-		{
+			function:      v.ValidateExistingFilepath,
+		}, {
 			name:          "empty filepath",
 			filepath:      "",
 			expectedError: fmt.Errorf(ErrFileNotExist, ""),
+			function:      v.ValidateExistingFilepath,
 		}, {
 			name:          "filled filpath but file doesn't exist",
 			filepath:      "test-data/testfile_xxx",
 			expectedError: fmt.Errorf(ErrFileNotExist, "test-data/testfile_xxx"),
+			function:      v.ValidateExistingFilepath,
 		}, {
 			name:          "file exists, is NOT writeable",
 			filepath:      "test-data/testfile_400",
 			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/testfile_400"),
+			function:      v.ValidateExistingFilepath,
 		}, {
 			name:          "irregular file",
 			filepath:      "/dev/nvme0n1",
 			expectedError: fmt.Errorf(ErrIrregularFile, "/dev/nvme0n1"),
+			function:      v.ValidateExistingFilepath,
 		}, {
-			name:          "file exists, is writeable, NOT database",
+			name:          "file exists, is writeable",
 			filepath:      "test-data/testfile_644",
-			expectedError: fmt.Errorf(ErrNotDatabase, "test-data/testfile_644", DB_FILE_EXTENSION),
-		}, {
-			name:          "file exists, is writeable, is database",
-			filepath:      "test-data/database.db",
 			expectedError: nil,
+			function:      v.ValidateExistingFilepath,
+		}, {
+			name:          "file already exists",
+			filepath:      "test-data/database.db",
+			expectedError: fmt.Errorf(ErrAlreadyExists, "test-data/database.db"),
+			function:      v.ValidateNewFilepath,
+		}, {
+			name:          "directory not writeable",
+			filepath:      "test-data/no-write-dir/file",
+			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/no-write-dir/file"),
+			function:      v.ValidateNewFilepath,
+		}, {
+			name:          "file is directory",
+			filepath:      "test-data/test",
+			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
+			function:      v.ValidateNewFilepath,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Unsetenv(XDG_DATA_DIR)
-			v := new(FileHandler{Filepath: tt.filepath})
-			v.FileExtension = DB_FILE_EXTENSION
-			v.ValidateFilepath()
+			v.ErrorMessage = nil
+			v.Filepath = tt.filepath
+			tt.function()
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
 			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(tt.expectedError)
@@ -99,6 +120,7 @@ func TestSearchForDatabase(t *testing.T) {
 
 			env, envSet := os.LookupEnv(DB_FILEPATH_ENV_VAR)
 			f := new(FileHandler)
+			f.GetEnvironmentVariable()
 			f.SearchForDatabase()
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON

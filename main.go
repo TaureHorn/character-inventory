@@ -19,12 +19,18 @@ character-inventory help
 
 func createFile(index int, args []string) {
 	f := new(files.FileHandler)
+	f.GetEnvironmentVariable()
+
 	if len(args) >= index+1 {
-		f.CreateDatabaseFile(args[index+1])
+		f.Mode = files.ARG
+		f.Filepath = args[index+1]
+	} else if f.EnvVarSet {
+		f.Mode = files.ENV
+		f.Filepath = f.EnvVar
 	} else {
-		f.CreateDatabaseFile(files.XDG_DATA_DIR)
+		f.Filepath = files.XDG_DATA_DIR
 	}
-	os.Exit(0)
+	f.CreateDatabaseFile()
 }
 
 // ITERATE OVER CMD ARGS FIND COMMANDS OR PROVIDED DATABASE FILEPATH
@@ -62,9 +68,9 @@ func printHelp() {
 }
 
 func main() {
+	fileHandler := new(files.FileHandler)
 	databaseFile, providedFilepath := parseCmdArguments(os.Args)
 
-	fileHandler := new(files.FileHandler)
 	if providedFilepath {
 		fileHandler.Init(databaseFile)
 	} else {
