@@ -19,9 +19,8 @@ const (
 	ErrEmptyEnvVar      string = "Set environment variable '%s' is empty"
 	ErrFileNotExist     string = "stat %s: no such file or directory"
 	ErrIrregularFile    string = "File '%s' is not a regular file"
-	ErrNotDatabase      string = "File %s is not a database with file extentsion %s"
 	ErrNonWriteable     string = "You do not have write permissions for file '%s'"
-	ErrPermissionDenied string = "stat %s: permission denied"
+	ErrPermissionDenied string = "stat %s: permission denied" // unused currently
 	ErrTargetDirectory  string = "%s is a directory not a file"
 	ErrXDGNotCreated    string = "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database"
 )
@@ -95,7 +94,6 @@ func (f *FileHandler) checkEdgeCase(fileErr error) (edgeErr error, overrideErr b
 	return
 }
 
-// TODO: make proccess for file creation
 func (f *FileHandler) CreateDatabaseFile() {
 	f.Context = CREATE
 	f.FileExtension = DB_FILE_EXTENSION
@@ -111,7 +109,7 @@ func (f *FileHandler) CreateDatabaseFile() {
 	}
 
 	// CREATE NEW FILE
-
+	// TODO: make proccess for file creation
 	return
 }
 
@@ -188,18 +186,12 @@ func (f *FileHandler) SearchForDatabase() {
 }
 
 func (f *FileHandler) ValidateDirectory() {
-
 	// CHECK BASE DIRECTORY EXISTS AND IS WRITABLE
-	dirInfo, err := os.Stat(path.Dir(f.Filepath))
+	_, err := os.Stat(path.Dir(f.Filepath))
 	if err != nil {
 		f.ErrorMessage = err
 		return
 	}
-	f.affirmWritePermission(dirInfo)
-	if f.ErrorMessage != nil {
-		return
-	}
-
 	return
 }
 

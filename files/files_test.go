@@ -16,53 +16,66 @@ func TestValidate(t *testing.T) {
 		name          string
 		filepath      string
 		expectedError error
-		context		  ValidationContext
+		context       ValidationContext
 	}{
+		// INITIATE NEW FILE HANDER TESTS
 		{
 			name:          "directory",
 			filepath:      "test-data/test",
 			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
-			context: INIT,
+			context:       INIT,
 		}, {
 			name:          "empty filepath",
 			filepath:      "",
 			expectedError: fmt.Errorf(ErrFileNotExist, ""),
-			context: INIT,
+			context:       INIT,
 		}, {
 			name:          "filled filpath but file doesn't exist",
 			filepath:      "test-data/testfile_xxx",
 			expectedError: fmt.Errorf(ErrFileNotExist, "test-data/testfile_xxx"),
-			context: INIT,
+			context:       INIT,
 		}, {
 			name:          "file exists, is NOT writeable",
 			filepath:      "test-data/testfile_400",
 			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/testfile_400"),
-			context: INIT,
+			context:       INIT,
 		}, {
 			name:          "irregular file",
 			filepath:      "/dev/nvme0n1",
 			expectedError: fmt.Errorf(ErrIrregularFile, "/dev/nvme0n1"),
-			context: INIT,
+			context:       INIT,
 		}, {
 			name:          "file exists, is writeable",
 			filepath:      "test-data/testfile_644",
 			expectedError: nil,
-			context: INIT,
+			context:       INIT,
+		}, 
+		// CREATE NEW DATABASE TESTS
+		{
+			name:          "file doesnt exist",
+			filepath:      "test-data/newDatabase",
+			expectedError: nil,
+			context:       CREATE,
+		}, {
+			name:          "file doesnt exist (CWD)",
+			filepath:      "newDatabase",
+			expectedError: nil,
+			context:       CREATE,
 		}, {
 			name:          "file already exists",
 			filepath:      "test-data/database.db",
 			expectedError: fmt.Errorf(ErrAlreadyExists, "test-data/database.db"),
-			context: CREATE,
+			context:       CREATE,
 		}, {
 			name:          "directory not writeable",
 			filepath:      "test-data/no-write-dir/file",
 			expectedError: fmt.Errorf(ErrPermissionDenied, "test-data/no-write-dir/file"),
-			context: CREATE,
+			context:       CREATE,
 		}, {
 			name:          "file is directory",
 			filepath:      "test-data/test",
 			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
-			context: CREATE,
+			context:       CREATE,
 		},
 	}
 	for _, tt := range tests {

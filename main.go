@@ -21,7 +21,7 @@ func createFile(index int, args []string) {
 	f := new(files.FileHandler)
 	f.GetEnvironmentVariable()
 
-	if len(args) >= index+1 {
+	if len(args) >= index+2 {
 		f.Mode = files.ARG
 		f.Filepath = args[index+1]
 	} else if f.EnvVarSet {
