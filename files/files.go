@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 // CONST
 const (
 	DB_DRIVER           string = "sqlite3"
 	DB_FILEPATH_ENV_VAR string = "CHAR_INV_DATABASE"
-	DB_FILE_EXTENSION   string = ".db"
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
 	// FILE ERRORS
@@ -55,23 +55,25 @@ type FileHandler struct {
 	EnvVarSet     bool
 	ErrorMessage  error
 	Filepath      string
-	FileExtension string
 	Mode          HandlerMode
 }
 
 // VALIDATION FUNCTIONS
+// Sets an error to FileHandler if a file matching passed in os.FileInfo exists
 func (f *FileHandler) affirmDoesNotExist(fileInfo os.FileInfo) {
 	if fileInfo != nil {
 		f.ErrorMessage = fmt.Errorf(ErrAlreadyExists, f.Filepath)
 	}
 }
 
+// Sets an error to FileHandler if file from passed in os.FileInfo is a directory
 func (f *FileHandler) affirmNotDirectory(fileInfo os.FileInfo) {
 	if fileInfo.IsDir() {
 		f.ErrorMessage = fmt.Errorf(ErrTargetDirectory, f.Filepath)
 	}
 }
 
+// Sets an error to FileHandler if file from passed in os.FileInfo not a regular file
 func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 	if !fileInfo.Mode().IsRegular() {
 		f.ErrorMessage = fmt.Errorf(ErrIrregularFile, f.Filepath)
@@ -79,6 +81,7 @@ func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 	return
 }
 
+// Sets an error to FileHandler if user does not have write permissions for file from passed in os.FileInfo file
 func (f *FileHandler) affirmWritePermission(fileInfo os.FileInfo) {
 	if fileInfo.Mode().Perm() < 0o600 {
 		// 0o600 IS OCTAL LITERAL EQUIVALENT TO USER WRITE PERMISSIONS
@@ -94,13 +97,18 @@ func (f *FileHandler) checkEdgeCase(fileErr error) (edgeErr error, overrideErr b
 	return
 }
 
+// Create a new database file in a specified location
 func (f *FileHandler) CreateDatabaseFile() {
 	f.Context = CREATE
-	f.FileExtension = DB_FILE_EXTENSION
 
-	// VALIDATE GIVEN FILEPATH
-	for _, validation := range []func(){f.ValidateDirectory, f.ValidateFilepath} {
-		validation()
+	// GET ABSOLUTE PATH OF f.Filepath AND VALIDATE PARENT DIRECTORY AND FILE IF EXISTS
+	var proc = []func(){
+		f.getFullFilepath,
+		f.ValidateDirectory,
+		f.ValidateFilepath,
+	}
+	for _, fn := range proc {
+		fn()
 		if f.ErrorMessage != nil {
 			fmt.Println(f.ErrorMessage)
 			os.Exit(1)
@@ -113,11 +121,25 @@ func (f *FileHandler) CreateDatabaseFile() {
 	return
 }
 
+// Set specified environemnt variable to FileHandler as well as a boolean for if variable is set
 func (f *FileHandler) GetEnvironmentVariable() {
 	f.EnvVar, f.EnvVarSet = os.LookupEnv(DB_FILEPATH_ENV_VAR)
 	return
 }
 
+// Modifty FileHandler.Filepath to expand environemnt variables and get absolute path
+func (f *FileHandler) getFullFilepath() {
+	path := os.ExpandEnv(f.Filepath)
+	path, err := filepath.Abs(path)
+	if err != nil {
+		f.ErrorMessage = err
+		return
+	}
+	f.Filepath = path
+	return
+}
+
+// Return a slice of functions depending on FileHandler.Context
 func (f *FileHandler) getValidationTests(context ValidationContext) (tests []func(os.FileInfo)) {
 	switch context {
 	case CREATE:
@@ -135,10 +157,10 @@ func (f *FileHandler) getValidationTests(context ValidationContext) (tests []fun
 	return
 }
 
+// Initialse FileHandler for normal use
 func (f *FileHandler) Init(path ...string) {
 	f.Context = INIT
 	f.Driver = DB_DRIVER
-	f.FileExtension = DB_FILE_EXTENSION
 	f.GetEnvironmentVariable()
 
 	// IF PROVIDED FILE PASSED IN FROM CMD ARGS SET f.Filepath, OTHERWISE FIND IN env OR XDG
@@ -151,19 +173,22 @@ func (f *FileHandler) Init(path ...string) {
 		f.SearchForDatabase()
 	}
 
-	// VALIDATE PROVIDED FILEPATH BEFORE RETURN
-	f.ValidateFilepath()
-
-	// CHECK FOR ERRORS SET TO FileHandler
-	if f.ErrorMessage != nil {
-		fmt.Println(f.ErrorMessage)
-		os.Exit(1)
+	// GET ABSOLUTE PATH OF f.Filepath & VALIDATE
+	var proc = []func(){
+		f.getFullFilepath,
+		f.ValidateFilepath,
 	}
-
+	for _, fn := range proc {
+		fn()
+		if f.ErrorMessage != nil {
+			fmt.Println(f.ErrorMessage)
+			os.Exit(1)
+		}
+	}
 	return
 }
 
-// LOOK IN ENV VAR OR XDG_DATA_DIR FOR DATABASE FILE
+// Look in ENV VAR or XDG_DATA_DIR for database file
 func (f *FileHandler) SearchForDatabase() {
 
 	// PICK BETWEEN DB_FILEPATH_ENV_VAR & XDG_DATA_DIR

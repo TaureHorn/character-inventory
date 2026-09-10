@@ -31,6 +31,7 @@ func createFile(index int, args []string) {
 		f.Filepath = files.XDG_DATA_DIR
 	}
 	f.CreateDatabaseFile()
+	os.Exit(0)
 }
 
 // ITERATE OVER CMD ARGS FIND COMMANDS OR PROVIDED DATABASE FILEPATH

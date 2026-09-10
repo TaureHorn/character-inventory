@@ -9,8 +9,6 @@ import (
 func TestValidate(t *testing.T) {
 
 	os.Unsetenv(DB_FILEPATH_ENV_VAR)
-	v := new(FileHandler)
-	v.FileExtension = DB_FILE_EXTENSION
 
 	tests := []struct {
 		name          string
@@ -49,7 +47,7 @@ func TestValidate(t *testing.T) {
 			filepath:      "test-data/testfile_644",
 			expectedError: nil,
 			context:       INIT,
-		}, 
+		},
 		// CREATE NEW DATABASE TESTS
 		{
 			name:          "file doesnt exist",
@@ -62,9 +60,19 @@ func TestValidate(t *testing.T) {
 			expectedError: nil,
 			context:       CREATE,
 		}, {
+			name:          "path contains $VAR",
+			filepath:      "$HOME/database.db",
+			expectedError: nil,
+			context:       CREATE,
+		}, {
 			name:          "file already exists",
 			filepath:      "test-data/database.db",
 			expectedError: fmt.Errorf(ErrAlreadyExists, "test-data/database.db"),
+			context:       CREATE,
+		}, {
+			name:          "directory doesn exist",
+			filepath:      "fake-directory/database",
+			expectedError: fmt.Errorf(ErrFileNotExist, "fake-directory/database"),
 			context:       CREATE,
 		}, {
 			name:          "directory not writeable",
@@ -80,10 +88,12 @@ func TestValidate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v.ErrorMessage = nil
+			v := new(FileHandler)
 			v.Filepath = tt.filepath
 			v.Context = tt.context
-			v.ValidateFilepath()
+			v.getFullFilepath()
+
+			// v.ValidateFilepath()
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
 			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(tt.expectedError)
