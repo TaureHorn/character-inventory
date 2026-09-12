@@ -4,6 +4,7 @@ package files
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,10 +12,12 @@ import (
 
 // CONST
 const (
-	DB_DRIVER           string = "sqlite3"
-	DB_FILEPATH_ENV_VAR string = "CHAR_INV_DATABASE"
-	DEFAULT_DB_FILEPATH string = "./default.db"
-	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
+	DB_DRIVER           string      = "sqlite3"
+	DB_FILEPATH_ENV_VAR string      = "CHAR_INV_DATABASE"
+	DEFAULT_DB_FILEPATH string      = "./default.db"
+	WRITEABLE           fs.FileMode = 0o600
+	WRITEABLE_DIR       fs.FileMode = 0o700
+	XDG_DATA_DIR        string      = "$HOME/.local/share/char-inv/char-inv.db"
 
 	// FILE ERRORS
 	ErrAlreadyExists    string = "%s already exists"
@@ -84,9 +87,28 @@ func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 
 // Sets an error to FileHandler if user does not have write permissions for file from passed in os.FileInfo file
 func (f *FileHandler) affirmWritePermission(fileInfo os.FileInfo) {
-	if fileInfo.Mode().Perm() < 0o600 {
+	if fileInfo.Mode().Perm() < WRITEABLE {
 		// 0o600 IS OCTAL LITERAL EQUIVALENT TO USER WRITE PERMISSIONS
 		f.ErrorMessage = errors.New(fmt.Sprintf(ErrPermissionDenied, f.Filepath))
+	}
+	return
+}
+
+// Creates new XDG folder if one does not exist
+func (f *FileHandler) assureXDGDir() {
+	abs := os.ExpandEnv(XDG_DATA_DIR)
+	abs, _ = filepath.Abs(abs)
+	if f.Mode != XDG || f.Filepath != abs {
+		return
+	}
+	
+	dir, _ := path.Split(f.Filepath)
+	_, err := os.Stat(dir)
+
+	if errors.Is(err, os.ErrNotExist) {
+		f.ErrorMessage = os.Mkdir(dir, WRITEABLE_DIR)
+	} else {
+		f.ErrorMessage = err
 	}
 	return
 }
@@ -110,6 +132,7 @@ func (f *FileHandler) CreateDatabaseFile() error {
 	// GET ABSOLUTE PATH OF f.Filepath AND VALIDATE PARENT DIRECTORY AND FILE IF EXISTS
 	var procs = []func(){
 		f.getFullFilepath,
+		f.assureXDGDir,
 		f.ValidateDirectory,
 		f.ValidateFilepath,
 	}
@@ -120,12 +143,17 @@ func (f *FileHandler) CreateDatabaseFile() error {
 		}
 	}
 
+	// REFACTOR: needs to be neater
+
 	// CREATE NEW FILE, WRITE DEFAULT DATABASE DATA TO IT
 	newDatabase, fileCreateErr := os.Create(f.Filepath)
 	if fileCreateErr != nil {
 		fmt.Println(fileCreateErr)
 	}
 
+	// WARN: This needs replacing as it is not remotely portable
+	// os.ReadFile is dependant on current working directory unless handed an absolute filepath
+	// post install can't be sure of install path so needs something relative to $GOPATH
 	defaultFilepath, _ := filepath.Abs(DEFAULT_DB_FILEPATH)
 	defaultDatabase, fileReadErr := os.ReadFile(defaultFilepath)
 	if fileReadErr != nil {
@@ -142,7 +170,7 @@ func (f *FileHandler) GetEnvironmentVariable() {
 	return
 }
 
-// Modifty FileHandler.Filepath to expand environemnt variables and get absolute path
+// Modify FileHandler.Filepath to expand environemnt variables and get absolute path
 func (f *FileHandler) getFullFilepath() {
 	path := os.ExpandEnv(f.Filepath)
 	path, err := filepath.Abs(path)
