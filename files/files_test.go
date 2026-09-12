@@ -4,8 +4,60 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"testing"
 )
+
+func TestNewFileCreation(t *testing.T) {
+	os.Unsetenv(DB_FILEPATH_ENV_VAR)
+	defaultData, readErr := os.ReadFile("default.db")
+	if readErr != nil {
+		t.Error(readErr)
+	}
+
+	tests := []struct {
+		filepath string
+		mode     HandlerMode
+	}{
+		{mode: ARG, filepath: "$HOME/Desktop/argTest.db"},
+		{mode: ENV, filepath: "$HOME/Desktop/envVar.db"},
+		{mode: XDG, filepath: XDG_DATA_DIR},
+	}
+	for _, tt := range tests {
+		_ = os.Remove(tt.filepath)
+		t.Run(tt.mode.String(), func(t *testing.T) {
+			f := new(FileHandler)
+			switch tt.mode {
+			case ARG:
+				f.Mode = tt.mode
+				f.Filepath = tt.filepath
+			case ENV:
+				f.Mode = tt.mode
+				os.Setenv(DB_FILEPATH_ENV_VAR, tt.filepath)
+				f.GetEnvironmentVariable()
+				f.Filepath = f.EnvVar
+			case XDG:
+				f.Mode = tt.mode
+				f.Filepath = tt.filepath
+			}
+			f.CreateDatabaseFile()
+
+			newFile, newFileReadErr := os.ReadFile(f.Filepath)
+			if newFileReadErr != nil {
+				t.Error(tt.mode, newFileReadErr)
+			}
+
+			if !reflect.DeepEqual(defaultData, newFile) {
+				t.Error("new file does not match default data")
+			}
+
+			deleteErr := os.Remove(f.Filepath)
+			if deleteErr != nil {
+				t.Error(tt.mode, deleteErr)
+			}
+		})
+	}
+}
 
 func TestValidate(t *testing.T) {
 
@@ -92,7 +144,7 @@ func TestValidate(t *testing.T) {
 			// FILEHANDLER SETUP
 			v := new(FileHandler{Context: tt.context, Filepath: tt.filepath})
 			v.getFullFilepath()
-			err := func() error {
+			wantedErr := func() error {
 				if tt.expectedError == "" {
 					return nil
 				} else {
@@ -109,14 +161,17 @@ func TestValidate(t *testing.T) {
 			switch tt.context {
 			case CREATE:
 				v.CreateDatabaseFile()
+				if wantedErr == nil {
+					os.Remove(v.Filepath)
+				}
 			case INIT:
 				v.Init()
 			}
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
-			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(err)
+			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(wantedErr)
 			if vErr != tErr {
-				t.Errorf("%s | Expected '%s', but got '%s'\n\n", t.Name(), err, v.ErrorMessage)
+				t.Errorf("%s | Expected '%s', but got '%s'\n\n", t.Name(), wantedErr, v.ErrorMessage)
 			}
 		})
 	}

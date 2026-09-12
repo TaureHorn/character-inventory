@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/TaureHorn/character-inventory/files"
 	"os"
+		
+	"github.com/TaureHorn/character-inventory/files"
 )
 
 const helpString = `character-inventory
@@ -30,7 +31,10 @@ func createFile(index int, args []string) {
 	} else {
 		f.Filepath = files.XDG_DATA_DIR
 	}
-	f.CreateDatabaseFile()
+	creationErr := f.CreateDatabaseFile()
+	if creationErr != nil {
+		fmt.Println(creationErr)
+	}
 	os.Exit(0)
 }
 
@@ -72,10 +76,16 @@ func main() {
 	fileHandler := new(files.FileHandler)
 	databaseFile, providedFilepath := parseCmdArguments(os.Args)
 
+	var initErr error
 	if providedFilepath {
-		fileHandler.Init(databaseFile)
+		initErr = fileHandler.Init(databaseFile)
 	} else {
-		fileHandler.Init()
+		initErr =fileHandler.Init()
 	}
+	if initErr != nil {
+		fmt.Println(initErr)
+		os.Exit(1)
+	}
+
 
 }

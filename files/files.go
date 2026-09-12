@@ -13,7 +13,7 @@ import (
 const (
 	DB_DRIVER           string = "sqlite3"
 	DB_FILEPATH_ENV_VAR string = "CHAR_INV_DATABASE"
-	DEFAULT_DB_FILEPATH string = "files/default.db"
+	DEFAULT_DB_FILEPATH string = "./default.db"
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
 	// FILE ERRORS
@@ -50,13 +50,13 @@ func (v ValidationContext) String() string {
 }
 
 type FileHandler struct {
-	Context          ValidationContext
-	Driver           string
-	EnvVar           string
-	EnvVarSet        bool
-	ErrorMessage     error
-	Filepath         string
-	Mode             HandlerMode
+	Context      ValidationContext
+	Driver       string
+	EnvVar       string
+	EnvVarSet    bool
+	ErrorMessage error
+	Filepath     string
+	Mode         HandlerMode
 }
 
 // VALIDATION FUNCTIONS
@@ -104,7 +104,7 @@ func (f *FileHandler) checkEdgeCase(err error) (edgeErr error, overrideErr bool)
 }
 
 // Create a new database file in a specified location
-func (f *FileHandler) CreateDatabaseFile() {
+func (f *FileHandler) CreateDatabaseFile() error {
 	f.Context = CREATE
 
 	// GET ABSOLUTE PATH OF f.Filepath AND VALIDATE PARENT DIRECTORY AND FILE IF EXISTS
@@ -116,25 +116,24 @@ func (f *FileHandler) CreateDatabaseFile() {
 	for _, fn := range procs {
 		fn()
 		if f.ErrorMessage != nil {
-			fmt.Println(f.ErrorMessage)
-			os.Exit(1)
-			break
+			return f.ErrorMessage
 		}
 	}
 
 	// CREATE NEW FILE, WRITE DEFAULT DATABASE DATA TO IT
-	// TODO: make proccess for file creation
 	newDatabase, fileCreateErr := os.Create(f.Filepath)
 	if fileCreateErr != nil {
 		fmt.Println(fileCreateErr)
 	}
-	defaultDatabase, fileReadErr := os.ReadFile(DEFAULT_DB_FILEPATH)
+
+	defaultFilepath, _ := filepath.Abs(DEFAULT_DB_FILEPATH)
+	defaultDatabase, fileReadErr := os.ReadFile(defaultFilepath)
 	if fileReadErr != nil {
 		fmt.Println(fileReadErr)
 	}
 	newDatabase.Write(defaultDatabase)
 	fmt.Printf("New file %s created!\n", newDatabase.Name())
-	return
+	return nil
 }
 
 // Set specified environemnt variable to FileHandler as well as a boolean for if variable is set
@@ -174,7 +173,7 @@ func (f *FileHandler) getValidationTests(context ValidationContext) (tests []fun
 }
 
 // Initialse FileHandler for normal use
-func (f *FileHandler) Init(path ...string) {
+func (f *FileHandler) Init(path ...string) error {
 	f.Context = INIT
 	f.Driver = DB_DRIVER
 	f.GetEnvironmentVariable()
@@ -197,12 +196,10 @@ func (f *FileHandler) Init(path ...string) {
 	for _, fn := range procs {
 		fn()
 		if f.ErrorMessage != nil {
-			fmt.Println(f.ErrorMessage)
-			os.Exit(1)
-			break
+			return f.ErrorMessage
 		}
 	}
-	return
+	return nil
 }
 
 // Look in ENV VAR or XDG_DATA_DIR for database file
