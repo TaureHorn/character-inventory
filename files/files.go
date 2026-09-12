@@ -13,6 +13,7 @@ import (
 const (
 	DB_DRIVER           string = "sqlite3"
 	DB_FILEPATH_ENV_VAR string = "CHAR_INV_DATABASE"
+	DEFAULT_DB_FILEPATH string = "files/default.db"
 	XDG_DATA_DIR        string = "$HOME/.local/share/char-inv/char-inv.db"
 
 	// FILE ERRORS
@@ -121,8 +122,18 @@ func (f *FileHandler) CreateDatabaseFile() {
 		}
 	}
 
-	// CREATE NEW FILE
+	// CREATE NEW FILE, WRITE DEFAULT DATABASE DATA TO IT
 	// TODO: make proccess for file creation
+	newDatabase, fileCreateErr := os.Create(f.Filepath)
+	if fileCreateErr != nil {
+		fmt.Println(fileCreateErr)
+	}
+	defaultDatabase, fileReadErr := os.ReadFile(DEFAULT_DB_FILEPATH)
+	if fileReadErr != nil {
+		fmt.Println(fileReadErr)
+	}
+	newDatabase.Write(defaultDatabase)
+	fmt.Printf("New file %s created!\n", newDatabase.Name())
 	return
 }
 
