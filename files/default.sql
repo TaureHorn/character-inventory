@@ -1,13 +1,3 @@
-// INITIATE DATABASE CONNECTION AND MANAGE CRUD OPERATIONS
-package files
-
-import (
-	// "database/sql"
- 	_ "github.com/mattn/go-sqlite3"
-)
-
-const (
-	DEFAULT_SQL string = `
 DROP TABLE IF EXISTS album;
 CREATE TABLE characters (
     id                  BLOB PRIMARY KEY NOT NULL,
@@ -23,5 +13,4 @@ CREATE TABLE items (
     name                VARCHAR(128) NOT NULL,
     weight              INTEGER,
     description         TEXT
-)`
 )
