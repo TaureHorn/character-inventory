@@ -12,7 +12,6 @@ import (
 
 // CONST
 const (
-	DB_DRIVER           string      = "sqlite3"
 	DB_FILEPATH_ENV_VAR string      = "CHAR_INV_DATABASE"
 	DEFAULT_DB_FILEPATH string      = "./default.db"
 	WRITEABLE           fs.FileMode = 0o600
@@ -24,7 +23,7 @@ const (
 	ErrEmptyEnvVar      string = "Set environment variable '%s' is empty"
 	ErrFileNotExist     string = "stat %s: no such file or directory"
 	ErrIrregularFile    string = "File '%s' is not a regular file"
-	ErrPermissionDenied string = "stat %s: permission denied" // unused currently
+	ErrPermissionDenied string = "stat %s: permission denied"
 	ErrTargetDirectory  string = "%s is a directory not a file"
 	ErrXDGNotCreated    string = "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database"
 )
@@ -54,7 +53,6 @@ func (v ValidationContext) String() string {
 
 type FileHandler struct {
 	Context      ValidationContext
-	Driver       string
 	EnvVar       string
 	EnvVarSet    bool
 	ErrorMessage error
@@ -203,7 +201,6 @@ func (f *FileHandler) getValidationTests(context ValidationContext) (tests []fun
 // Initialse FileHandler for normal use
 func (f *FileHandler) Init(path ...string) error {
 	f.Context = INIT
-	f.Driver = DB_DRIVER
 	f.GetEnvironmentVariable()
 
 	// IF PROVIDED FILE PASSED IN FROM CMD ARGS SET f.Filepath, OTHERWISE FIND IN env OR XDG

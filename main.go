@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-		
+
 	"github.com/TaureHorn/character-inventory/files"
 )
 
@@ -34,7 +34,18 @@ func createFile(index int, args []string) {
 	creationErr := f.CreateDatabaseFile()
 	if creationErr != nil {
 		fmt.Println(creationErr)
+		os.Exit(1)
 	}
+
+	d := new(files.DataHandler)
+	d.Init(files.DB_DRIVER, f.Filepath, files.CREATE)
+	d.WriteDefaultData()
+
+	if d.ErrorMessage != nil {
+		fmt.Println(d.ErrorMessage)
+		os.Exit(1)
+	}
+
 	os.Exit(0)
 }
 
@@ -73,6 +84,7 @@ func printHelp() {
 }
 
 func main() {
+	// Get FileHandler
 	fileHandler := new(files.FileHandler)
 	databaseFile, providedFilepath := parseCmdArguments(os.Args)
 
@@ -80,12 +92,15 @@ func main() {
 	if providedFilepath {
 		initErr = fileHandler.Init(databaseFile)
 	} else {
-		initErr =fileHandler.Init()
+		initErr = fileHandler.Init()
 	}
 	if initErr != nil {
 		fmt.Println(initErr)
 		os.Exit(1)
 	}
 
-
+	// Connect to Database
+	dataHandler := new(files.DataHandler)
+	dataHandler.Init(files.DB_DRIVER, fileHandler.Filepath, fileHandler.Context)
+	defer dataHandler.Database.Close()
 }

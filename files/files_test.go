@@ -8,6 +8,25 @@ import (
 	"testing"
 )
 
+const (
+	MEMORY 		string = ":memory:"
+	SQL_VERSION string = "3.53.4"
+)
+
+func TestDatabase(t *testing.T) {
+	d := new(DataHandler)
+	d.Init(DB_DRIVER, MEMORY, INIT)
+
+	var version string
+	err := d.Database.QueryRow("SELECT SQLITE_VERSION()").Scan(&version)
+	if err != nil {
+		t.Error(err)
+	} else if version != SQL_VERSION {
+		t.Errorf("Expected '%s', got '%s'\n", SQL_VERSION, version)
+	}
+	
+}
+
 func TestNewFileCreation(t *testing.T) {
 	os.Unsetenv(DB_FILEPATH_ENV_VAR)
 	defaultData, readErr := os.ReadFile("default.db")
@@ -233,3 +252,5 @@ func TestSearchForDatabase(t *testing.T) {
 		})
 	}
 }
+
+

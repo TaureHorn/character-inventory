@@ -12,5 +12,5 @@ CREATE TABLE items (
     sort_name           VARCHAR(128) NOT NULL,
     name                VARCHAR(128) NOT NULL,
     weight              INTEGER,
-    description         TEXT
+    description         TEXT,
 )
