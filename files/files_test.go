@@ -3,6 +3,7 @@ package files
 import (
 	"fmt"
 	"os"
+	"path"
 	"testing"
 )
 
@@ -13,92 +14,109 @@ func TestValidate(t *testing.T) {
 	tests := []struct {
 		name          string
 		filepath      string
-		expectedError error
+		expectedError string
 		context       ValidationContext
 	}{
 		// INITIATE NEW FILE HANDER TESTS
 		{
 			name:          "directory",
 			filepath:      "test-data/test",
-			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
+			expectedError: ErrTargetDirectory,
 			context:       INIT,
 		}, {
 			name:          "empty filepath",
 			filepath:      "",
-			expectedError: fmt.Errorf(ErrFileNotExist, ""),
+			expectedError: ErrTargetDirectory,
 			context:       INIT,
 		}, {
 			name:          "filled filpath but file doesn't exist",
 			filepath:      "test-data/testfile_xxx",
-			expectedError: fmt.Errorf(ErrFileNotExist, "test-data/testfile_xxx"),
+			expectedError: ErrFileNotExist,
 			context:       INIT,
 		}, {
 			name:          "file exists, is NOT writeable",
 			filepath:      "test-data/testfile_400",
-			expectedError: fmt.Errorf(ErrNonWriteable, "test-data/testfile_400"),
+			expectedError: ErrPermissionDenied,
 			context:       INIT,
 		}, {
 			name:          "irregular file",
 			filepath:      "/dev/nvme0n1",
-			expectedError: fmt.Errorf(ErrIrregularFile, "/dev/nvme0n1"),
+			expectedError: ErrIrregularFile,
 			context:       INIT,
 		}, {
 			name:          "file exists, is writeable",
 			filepath:      "test-data/testfile_644",
-			expectedError: nil,
+			expectedError: "",
 			context:       INIT,
 		},
 		// CREATE NEW DATABASE TESTS
 		{
 			name:          "file doesnt exist",
 			filepath:      "test-data/newDatabase",
-			expectedError: nil,
+			expectedError: "",
 			context:       CREATE,
 		}, {
 			name:          "file doesnt exist (CWD)",
 			filepath:      "newDatabase",
-			expectedError: nil,
+			expectedError: "",
 			context:       CREATE,
 		}, {
 			name:          "path contains $VAR",
 			filepath:      "$HOME/database.db",
-			expectedError: nil,
+			expectedError: "",
 			context:       CREATE,
 		}, {
 			name:          "file already exists",
 			filepath:      "test-data/database.db",
-			expectedError: fmt.Errorf(ErrAlreadyExists, "test-data/database.db"),
+			expectedError: ErrAlreadyExists,
 			context:       CREATE,
 		}, {
-			name:          "directory doesn exist",
+			name:          "directory doesn't exist",
 			filepath:      "fake-directory/database",
-			expectedError: fmt.Errorf(ErrFileNotExist, "fake-directory/database"),
+			expectedError: ErrFileNotExist,
 			context:       CREATE,
 		}, {
 			name:          "directory not writeable",
 			filepath:      "test-data/no-write-dir/file",
-			expectedError: fmt.Errorf(ErrPermissionDenied, "test-data/no-write-dir/file"),
+			expectedError: ErrPermissionDenied,
 			context:       CREATE,
 		}, {
 			name:          "file is directory",
 			filepath:      "test-data/test",
-			expectedError: fmt.Errorf(ErrTargetDirectory, "test-data/test"),
+			expectedError: ErrTargetDirectory,
 			context:       CREATE,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := new(FileHandler)
-			v.Filepath = tt.filepath
-			v.Context = tt.context
+			// FILEHANDLER SETUP
+			v := new(FileHandler{Context: tt.context, Filepath: tt.filepath})
 			v.getFullFilepath()
+			err := func() error {
+				if tt.expectedError == "" {
+					return nil
+				} else {
+					filepath := v.Filepath
+					if tt.name == "directory doesn't exist" {
+						filepath = path.Dir(v.Filepath)
+					}
 
-			// v.ValidateFilepath()
+					return fmt.Errorf(tt.expectedError, filepath)
+				}
+			}()
+
+			// RUN
+			switch tt.context {
+			case CREATE:
+				v.CreateDatabaseFile()
+			case INIT:
+				v.Init()
+			}
 
 			// CONVERT TO STRINGS TO EASILY USE nil OR fs.PathError IN COMPARISON
-			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(tt.expectedError)
+			vErr, tErr := fmt.Sprint(v.ErrorMessage), fmt.Sprint(err)
 			if vErr != tErr {
-				t.Errorf("%s | Expected '%s', but got '%s'\n", t.Name(), tt.expectedError, v.ErrorMessage)
+				t.Errorf("%s | Expected '%s', but got '%s'\n\n", t.Name(), err, v.ErrorMessage)
 			}
 		})
 	}

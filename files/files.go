@@ -2,6 +2,7 @@
 package files
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -19,7 +20,6 @@ const (
 	ErrEmptyEnvVar      string = "Set environment variable '%s' is empty"
 	ErrFileNotExist     string = "stat %s: no such file or directory"
 	ErrIrregularFile    string = "File '%s' is not a regular file"
-	ErrNonWriteable     string = "You do not have write permissions for file '%s'"
 	ErrPermissionDenied string = "stat %s: permission denied" // unused currently
 	ErrTargetDirectory  string = "%s is a directory not a file"
 	ErrXDGNotCreated    string = "Defaulted to XDG database (%s) but it hasn't been created yet.\nUse 'character-inventory new' to generate new database"
@@ -49,34 +49,34 @@ func (v ValidationContext) String() string {
 }
 
 type FileHandler struct {
-	Context       ValidationContext
-	Driver        string
-	EnvVar        string
-	EnvVarSet     bool
-	ErrorMessage  error
-	Filepath      string
-	Mode          HandlerMode
+	Context          ValidationContext
+	Driver           string
+	EnvVar           string
+	EnvVarSet        bool
+	ErrorMessage     error
+	Filepath         string
+	Mode             HandlerMode
 }
 
 // VALIDATION FUNCTIONS
 // Sets an error to FileHandler if a file matching passed in os.FileInfo exists
 func (f *FileHandler) affirmDoesNotExist(fileInfo os.FileInfo) {
 	if fileInfo != nil {
-		f.ErrorMessage = fmt.Errorf(ErrAlreadyExists, f.Filepath)
+		f.ErrorMessage = errors.New(fmt.Sprintf(ErrAlreadyExists, f.Filepath))
 	}
 }
 
 // Sets an error to FileHandler if file from passed in os.FileInfo is a directory
 func (f *FileHandler) affirmNotDirectory(fileInfo os.FileInfo) {
 	if fileInfo.IsDir() {
-		f.ErrorMessage = fmt.Errorf(ErrTargetDirectory, f.Filepath)
+		f.ErrorMessage = errors.New(fmt.Sprintf(ErrTargetDirectory, f.Filepath))
 	}
 }
 
 // Sets an error to FileHandler if file from passed in os.FileInfo not a regular file
 func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 	if !fileInfo.Mode().IsRegular() {
-		f.ErrorMessage = fmt.Errorf(ErrIrregularFile, f.Filepath)
+		f.ErrorMessage = errors.New(fmt.Sprintf(ErrIrregularFile, f.Filepath))
 	}
 	return
 }
@@ -85,14 +85,19 @@ func (f *FileHandler) affirmRegularFile(fileInfo os.FileInfo) {
 func (f *FileHandler) affirmWritePermission(fileInfo os.FileInfo) {
 	if fileInfo.Mode().Perm() < 0o600 {
 		// 0o600 IS OCTAL LITERAL EQUIVALENT TO USER WRITE PERMISSIONS
-		f.ErrorMessage = fmt.Errorf(ErrNonWriteable, f.Filepath)
+		f.ErrorMessage = errors.New(fmt.Sprintf(ErrPermissionDenied, f.Filepath))
 	}
 	return
 }
 
-func (f *FileHandler) checkEdgeCase(fileErr error) (edgeErr error, overrideErr bool) {
-	if fileErr.Error() == fmt.Errorf(ErrFileNotExist, XDG_DATA_DIR).Error() {
-		return fmt.Errorf(ErrXDGNotCreated, XDG_DATA_DIR), true
+func (f *FileHandler) checkEdgeCase(err error) (edgeErr error, overrideErr bool) {
+	switch err.Error() {
+	case fmt.Sprintf(ErrFileNotExist, XDG_DATA_DIR):
+		return errors.New(fmt.Sprintf(ErrXDGNotCreated, XDG_DATA_DIR)), true
+	case fmt.Sprintf(ErrFileNotExist, f.Filepath):
+		if f.Context == CREATE {
+			return nil, true
+		}
 	}
 	return
 }
@@ -102,12 +107,12 @@ func (f *FileHandler) CreateDatabaseFile() {
 	f.Context = CREATE
 
 	// GET ABSOLUTE PATH OF f.Filepath AND VALIDATE PARENT DIRECTORY AND FILE IF EXISTS
-	var proc = []func(){
+	var procs = []func(){
 		f.getFullFilepath,
 		f.ValidateDirectory,
 		f.ValidateFilepath,
 	}
-	for _, fn := range proc {
+	for _, fn := range procs {
 		fn()
 		if f.ErrorMessage != nil {
 			fmt.Println(f.ErrorMessage)
@@ -174,15 +179,16 @@ func (f *FileHandler) Init(path ...string) {
 	}
 
 	// GET ABSOLUTE PATH OF f.Filepath & VALIDATE
-	var proc = []func(){
+	var procs = []func(){
 		f.getFullFilepath,
 		f.ValidateFilepath,
 	}
-	for _, fn := range proc {
+	for _, fn := range procs {
 		fn()
 		if f.ErrorMessage != nil {
 			fmt.Println(f.ErrorMessage)
 			os.Exit(1)
+			break
 		}
 	}
 	return
@@ -214,6 +220,10 @@ func (f *FileHandler) ValidateDirectory() {
 	// CHECK BASE DIRECTORY EXISTS AND IS WRITABLE
 	_, err := os.Stat(path.Dir(f.Filepath))
 	if err != nil {
+		edgeErr, overrideErr := f.checkEdgeCase(err)
+		if overrideErr {
+			err = edgeErr
+		}
 		f.ErrorMessage = err
 		return
 	}
